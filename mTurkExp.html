@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <!--
+       Some of the functions below are written by Jason Carpenter.
+       GitHub: https://github.com/jmcarpenter2
+    -->
+    <title>mTurk Short Survey</title>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+    <script src="jspsych-6.0.5/jspsych.js"></script>
+    <link href="jspsych-6.0.5/css/jspsych.css" rel="stylesheet" type="text/css"></link>
+    <!--Your jsPsych plugins below this line-->
+
+    <script src="jspsych-6.0.5/plugins/jspsych-survey-multi-choice.js"></script>
+    <script src="jspsych-6.0.5/plugins/jspsych-RDK.js"></script>
+    <script src="jspsych-6.0.5/plugins/jspsych-instructions.js"></script>
+
+    <!--Your jsPsych plugins above this line-->
+    <script src="jspsych-6.0.5/plugins/jspsych-external-html.js"></script>
+    <script src="jspsych-6.0.5/plugins/jspsych-html-keyboard-response.js"></script>
+    <script src="jspsych-6.0.5/plugins/jspsych-html-button-response.js"></script>
+</head>
+<body>
+</body>
+<script>
+
+        //Data switches
+        var saveLocally = 1;	// 0: Nothing.	1: Download CSV file
+        var displayData = 0;  // 0: Nothing.	1: Display data on browser
+        var launchOnline = 0;	// 0: Nothing.	1: Save to database, consent form, completion code generation, dummy variables created for all 3 IDs
+        var tableName = 'sample_exp_no_psiturk'; //Name of the table in the database
+
+
+        //Get the info from mTurk
+        var turkInfo = jsPsych.turk.turkInfo();
+
+        //If we're not on mTurk, we create our own values
+        if(turkInfo.workerId == ''){
+
+            // Use the timestamp as a unique id (specific to the second)
+            var timestamp = Math.floor(Date.now()/1000);
+
+            workerId = "workerId_" + timestamp;
+            assignmentId = "assignmentId_" + timestamp;
+            hitId = "hitId_" + timestamp;
+
+        }
+        //Else we're on mTurk and we get the values
+        else{
+
+            workerId = turkInfo.workerId;
+            assignmentId = turkInfo.assignmentId;
+            hitId = turkInfo.hitId;
+
+        }
+
+        //Print out to console to check
+        console.log("workerId: " + workerId);
+        console.log("assignmentId: " + assignmentId);
+        console.log("hitId: " + hitId);
+
+        var consentForm = "consentForm.html"; //or "consentForm_CNC.html" if you're launching from UCR CNC lab
+
+        //------------------- Your code below this line -------------------
+
+
+        //Parameters
+        var nTrialsPerCoherence = 2;
+        var coherences = [0.1, 0.2, 0.3];
+        var practiceCoherences = [0.9, 0.7, 0.5, 0.3, 0.1] //Must be in descending order
+        var totalTrials = nTrialsPerCoherence*coherences.length;
+
+        //Set parameters
+        var keyChoices = ["k", "l"];
+        var confidenceChoices = ["1","2","3","4"]
+        var directions = [0, 180];
+
+        //Make these global variables and create them
+        var RDK_template;
+        var leftRight_template;
+        var confidence_template;
+        makeTemplates();
+
+        var instructions = makeInstructions();
+        var practiceTrials = makePracticeTrials();
+        var instructions2 = makeInstructions2();
+        var actualTrials = makeActualTrials();
+        var instructionsEnd = makeInstructionsEnd();
+
+
+        var timeline = []; //Keep this
+        timeline.push(instructions);
+        timeline.push(practiceTrials);
+        timeline.push(instructions2);
+        timeline.push(actualTrials); //Replace this with your experiment
+        timeline.push(instructionsEnd);
+
+
+        //Function to make the actual trials instructions
+        function makeInstructionsEnd(){
+
+          var page1 = 'Amazing job! You are done with the experiment!<br><br>'+
+            'Once you click "Next" below, the experiment will end.<br><br>'+
+            'Your csv data file should download automatically. Follow Dr.Peters\' instructions on what to do with it.<br><br>'+
+            'Click "Next" to exit the experiment and download the csv data file.';
+
+          return{
+            type: 'instructions',
+            pages:[page1],
+            show_clickable_nav: true
+          };
+        }
+
+
+        //Function to make the actual trials instructions
+        function makeInstructions2(){
+
+          var page1 = 'Great job on the practice trials!<br><br>'+
+            'We will now move on to the actual experiment.<br><br>'+
+            'This will be exactly the same as the practice trials except that: <br>(1) It will resemble the more difficult practice trials and <br>(2) The difficulty is randomly assigned instead of being in descending order.<br><br>'+
+            'Click "Next" to start the actual trials.';
+
+          return{
+            type: 'instructions',
+            pages:[page1],
+            show_clickable_nav: true
+          };
+        }
+
+        //Function to make the practice Trials
+        function makePracticeTrials(){
+          var practiceTrialsArray = []
+
+          //For loop that makes each trial
+          for(var i = 0; i < practiceCoherences.length; ++i){
+
+            //Create a copy of the RDK object
+            let current_RDK = {...RDK_template};
+            //Change the values
+            current_RDK.coherent_direction = Math.random()<0.5 ? 0 : 180;
+            current_RDK.coherence = practiceCoherences[i]
+
+            //Push the trials into the array
+            practiceTrialsArray.push(current_RDK);
+            practiceTrialsArray.push({...leftRight_template});
+            practiceTrialsArray.push({...confidence_template});
+          }
+          return {type: 'jspsych-RDK', timeline: practiceTrialsArray};
+        }
+
+
+        //Function to make the opening instructions
+        function makeInstructions(){
+
+          var page1 = 'Welcome to the experiment.<br><br>'+
+            'You will be presented with dots moving on the screen. Some percentage of those dots  will be moving either to the right or left together. These are called the "coherent dots".<br><br>'+
+            '<b>Your task is to decide whether they moved to the right or to the left.</b> Some trials will be easier (more dots moving together), and some trials will be more difficult (less dots moving together).<br><br>'+
+            'The dots will be shown for a very short amount of time (only a fraction of a second), so make sure to have your eyes fixed on the center of the screen <i>before</i> the dots are presented.';
+
+
+          var page2 = `After the dots have been presented, they will disappear and a response screen will be shown. Here you will give your response on which direction you think the dots moved.<br><br>`+
+            `If you think that the coherent dots moved to the <b>left</b>, press the <b>${keyChoices[0].toUpperCase()}</b> key.<br><br>`+
+            `If you think that the coherent dots moved to the <b>right</b>, press the <b>${keyChoices[1].toUpperCase()}</b> key.<br><br>`+
+            `You will be reminded on the response screen itself so you do not have to memorize these keys.`
+
+          var page3 = `After the you have given your left/right response, another screen will be shown where you will have to key in your confidence rating of your left/right response.<br><br>`+
+            `The confidence rating is on a scale of 1 to 4, where 1 means you are not confident at all, and 4 means you are extremely confident.<br><br>`+
+            `You can key in your confidence rating with the "1","2","3", and "4" keys above the "QWER" keys on your keyboard.<br><br>`+
+            `You will again be reminded on the confidence rating screen itself so you do not have to memorize these keys.`
+
+          var page4 = `To start, we will give you ${practiceCoherences.length} practice trials such that you are familiar with the experiment flow.<br><br>`+
+            `These trials will be exactly like that of the experiment, except it will start off being very easy and then get progressively more difficult.<br><br>`+
+            `The actual experiment will be similar to the more difficult trials and the difficulty of each trial is random.<br><br>`+
+            `Click next to start the trial.<br><br>`+
+            ` Remember to keep your gaze at the center of the screen because the dots are flashed for only a fraction of a second.`
+
+
+          return{
+            type: 'instructions',
+            pages:[page1, page2, page3, page4],
+            show_clickable_nav: true
+          };
+        }
+
+
+        //Function to make the actual trials in the experiment
+        function makeActualTrials(){
+
+          //Create a random permutation of coherences and left/right direction and answers
+          var coherencePermutation = jsPsych.randomization.repeat(coherences, nTrialsPerCoherence);
+          var directionsPermutation = jsPsych.randomization.sampleWithReplacement(directions, totalTrials);
+
+          //Make an array to hold the Trials
+          var actualTrialsArray = []
+
+          //For loop that makes each trial
+          for(var i = 0; i < totalTrials; ++i){
+
+            //Create a copy of the RDK object
+            let current_RDK = {...RDK_template};
+            //Change the values
+            current_RDK.coherent_direction = directionsPermutation[i]
+            current_RDK.coherence = coherencePermutation[i]
+
+            //Push the trials into the array
+            actualTrialsArray.push(current_RDK);
+            actualTrialsArray.push({...leftRight_template});
+            actualTrialsArray.push({...confidence_template});
+
+          }
+
+          return {type: 'jspsych-RDK', timeline: actualTrialsArray};
+
+        }
+        //End of makeActualTrials
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        //------------------- Your code above this line -------------------
+
+        //If we're launching this online, we add in the consent form, generate the completion code, and put in the block to tell them what the code is
+        if(launchOnline){
+        	timeline.unshift(createConsentFormBlock())
+	        timeline.push(createCompletionCodeBlock());
+	        timeline.push(createGoodbyeBlock());
+    	}
+
+        //Initiate the experiment
+        jsPsych.init({
+            timeline: timeline,
+            on_finish: function(){ //Execute this when the experiment finishes
+                if(saveLocally == true){
+                    jsPsych.data.get().localSave('csv','testSave.csv'); //Save the data locally in a .csv file
+                }
+                if(displayData == true){
+                    jsPsych.data.displayData(); //Display the data onto the browser screen
+                }
+            },
+            on_trial_finish: function(){ //Execute this after every trial
+                if (launchOnline == true){
+                    save_data(tableName, [jsPsych.data.get().last(1).values()[0]]);
+                }
+            }
+        });
+
+
+        //==================================================
+        //=================== FUNCTIONS ====================
+        //==================================================
+
+        //Function to make the templates
+        function makeTemplates(){
+
+            //Template RDK
+            RDK_template = {
+              type: 'RDK',
+              choices: keyChoices,
+              background_color: 'white',
+              dot_color: 'black'
+            };
+
+            //Template left/right Trials
+            leftRight_template = {
+              type: 'html-keyboard-response',
+              stimulus: '<h3> Did the coherent dots go left or right?<br></h3>' +
+                `<p>Press the "<b>${keyChoices[0].toUpperCase()}</b>" if the went <b>left</b>.</p>` +
+                `<p>Press the "<b>${keyChoices[1].toUpperCase()}</b>" if the went <b>right</b>.</p>`,
+              choices: keyChoices
+            };
+
+            //Template confidence Trials
+            confidence_template = {
+              type: 'html-keyboard-response',
+              stimulus: '<h3> How confident are you in your decision?<br></h3>' +
+                `<p>Press the keys from 1 to 4 to indicate your confidence.</p>` +
+                `<p>"1" is not confident at all, and "4" is extremely confident</p>`,
+              choices: confidenceChoices
+            };
+
+        }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        //-------- Trial-Making --------
+
+        //Creates a consent form trial and returns it
+        function createConsentFormBlock(){
+
+	        return {
+	          type:'external-html',
+	          url: consentForm,
+	          cont_btn: "startExperimentButton",
+	          check_fn: check_consent
+	        };
+        }
+
+        //Create trial to generate completion code, and check if they've earned a bonus on this session
+        function createCompletionCodeBlock(){
+
+	        return {
+	            type: 'html-keyboard-response',
+	            stimulus: '<center><p class="loader" style="margin-top: 20%">Loading...</p></center>',
+	            timing_response: 1,
+	            trial_duration: 10,
+	            //display_element: $('#vert-center'),
+	            on_finish: function()
+	            {
+	                // Create completionCode and check if it exists in the database. Keep running until a unique one is generated
+	                completionCode = Math.floor(Math.random() * 9000000 + 1000000);
+	                checkID(false, completionCode, 'completion_code', tableName, function(exists){getNewSubID(exists);});
+	            },
+	            timing_post_trial: 0
+	        };
+        }
+
+        //Create trial to thank the participate, tell them about their bonus, and display their completionCode completion code
+        function createGoodbyeBlock(){
+
+	        return {
+	            type: 'html-button-response',
+	            stimulus: function()
+	            {
+	                var output = '<p class="instructions">Thank you for participating!</p>';
+	                var data = jsPsych.data.get().last(1).values()[0];
+	                var completionCode = data.completion_code;
+
+	                // Display completionCode completion code
+	                output += '<p class="instructions"> Your survey code is: <strong>'+ completionCode + '</strong></p>' +
+	                    '<p class="instructions">Please paste this number back into the box at the mTurk HIT website.</p>' +
+	                    '<p class="instructions"><i>Do <b>NOT</b> close this window until you have submitted the above code.</i></p>';
+
+	                return output;
+	            },
+	            choices: ['I have submitted the code. Exit the experiment.'],
+	            timing_post_trial: 0
+	        };
+        }
+
+        //-------- Functionality --------
+
+        // Function to draw parameters from the URL
+        function $_GET(param)
+        {
+            var vars = {};
+            window.location.href.replace(
+                /[?&]+([^=&]+)=?([^&]*)?/gi, // regexp
+                function( m, key, value ) { // callback
+                    vars[key] = value !== undefined ? value : '';
+                }
+            );
+
+            if ( param )
+            {
+                console.log(vars);
+                console.log(param);
+                return vars[param] ? vars[param] : null;
+            }
+            return vars;
+        }
+
+        // Function to check compare the inputted ID to all IDs of the IDType in the SQL database
+        function checkID(async, ID, IDType, data_table, callback)
+        {
+            $.ajax({
+                type:'post',
+                cache: false,
+                async: async,
+                url: 'checkSubID.php',
+                data: // Inputs into the .php script
+                {
+                    ID: ID,
+                    IDType: IDType,
+                    completeTrials: 3450,
+                    data_table: data_table
+                },
+                success: function(exists)  // Use whatever callback function is specified when calling the checkID function
+                {
+                    callback(exists);
+                },
+                error: function (xhr, ajaxOptions, thrownError)
+                {
+                   alert(thrownError);
+               }
+           });
+        }
+
+        // Callback function for checking if the completionCode exists
+        function getNewSubID(exists)
+        {
+            if (exists === '1' || exists === 1) // If the completionCode exists in the SQL database
+            {
+                completionCode = Math.floor(Math.random() * 9000000 + 1000000); // Generate new completionCode
+                checkID(false, completionCode, 'completion_code', tableName, function(existsNow){getNewSubID(existsNow);}); // Check if the new completionCode exists in the database
+            }
+            else // If the completionCode doesn't exist in the SQL database
+                jsPsych.data.addProperties({completion_code: completionCode}); // Add the completionCode to the data
+        }
+
+        //A function to save the data to the SQL table on the server.  This gets called at the end of the file.
+        function save_data(data_table,data){
+
+            //Add data to the jsPsych data file
+            jsPsych.data.addProperties({
+                workerId: workerId,
+                assignmentId: assignmentId,
+                hitId: hitId
+            });
+
+            //Use AJAX to post the data onto the server
+            $.ajax({
+                type:'post',
+                cache: false,
+                url: 'savedata.php',
+                data: {
+                    table: data_table,
+                    json: JSON.stringify(data),
+                },
+                success: function(output) { console.log(output); } // write the result to javascript console
+            });
+        }
+
+        // sample function that might be used to check if a subject has given
+        // consent to participate.
+        function check_consent(elem) {
+          if ($('#consent_checkbox').is(':checked')) {
+            return true;
+          }
+          else {
+            alert("If you wish to participate, you must check the box next to the statement 'I agree to participate in this study.'");
+            return false;
+          }
+          return false;
+        };
+
+
+  </script>
+  </html>
